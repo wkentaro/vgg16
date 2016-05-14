@@ -19,9 +19,9 @@ import fcn
 this_dir = osp.dirname(osp.realpath(__file__))
 
 
-class APC2015berkeley(Bunch):
+class APC2015(Bunch):
 
-    dataset_dir = osp.join(this_dir, 'dataset/APC2015berkeley')
+    berkeley_dataset_dir = osp.join(this_dir, 'dataset/APC2015berkeley')
 
     def __init__(self, db_path):
         self.db = plyvel.DB(db_path, create_if_missing=True)
@@ -59,22 +59,29 @@ class APC2015berkeley(Bunch):
         self.img_files = []
         self.mask_files = []
         self.target = []
-        for label_value, label_name in enumerate(self.target_names):
-            img_file_glob = osp.join(self.dataset_dir, label_name, '*.jpg')
-            for img_file in glob.glob(img_file_glob):
-                img_id = re.sub('.jpg$', '', osp.basename(img_file))
-                mask_file = osp.join(
-                    self.dataset_dir, label_name, 'masks',
-                    img_id + '_mask.jpg')
-                id_ = osp.join(label_name, img_id)
-                self.ids.append(id_)
-                self.img_files.append(img_file)
-                self.mask_files.append(mask_file)
-                self.target.append(label_value)
+
+        self._load_berkeley()
+
         self.ids = np.array(self.ids)
         self.img_files = np.array(self.img_files)
         self.mask_files = np.array(self.mask_files)
         self.target = np.array(self.target)
+
+    def _load_berkeley(self):
+        # APC2015berkeley dataset
+        for label_value, label_name in enumerate(self.target_names):
+            img_file_glob = osp.join(
+                self.berkeley_dataset_dir, label_name, '*.jpg')
+            for img_file in glob.glob(img_file_glob):
+                img_id = re.sub('.jpg$', '', osp.basename(img_file))
+                mask_file = osp.join(
+                    self.berkeley_dataset_dir, label_name, 'masks',
+                    img_id + '_mask.jpg')
+                id_ = osp.join('berkeley', label_name, img_id)
+                self.ids.append(id_)
+                self.img_files.append(img_file)
+                self.mask_files.append(mask_file)
+                self.target.append(label_value)
 
     def next_batch(self, batch_size):
         n_data = len(self.ids)
