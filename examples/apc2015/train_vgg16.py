@@ -52,11 +52,9 @@ display_templ = '{i_iter}: loss={loss}, acc={acc}'
 max_iteration = 100000
 batch_size = 10
 for i_iter in xrange(0, max_iteration, batch_size):
-    batch_data = dataset.next_batch(batch_size=batch_size)
-    x = np.array([d['x'] for d in batch_data], dtype=np.float32)
+    x, t = dataset.next_batch(batch_size=batch_size)
     x = cuda.to_gpu(x)
     x = Variable(x, volatile=False)
-    t = np.array([d['t'] for d in batch_data], dtype=np.int32)
     t = cuda.to_gpu(t)
     t = Variable(t, volatile=False)
     optimizer.zero_grads()

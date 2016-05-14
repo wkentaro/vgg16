@@ -3,6 +3,7 @@
 from __future__ import division
 from __future__ import print_function
 
+import cPickle as pickle
 import glob
 import os.path as osp
 import re
@@ -10,6 +11,7 @@ import re
 import numpy as np
 import plyvel
 from scipy.misc import imread
+from scipy.misc import imresize
 from skimage.transform import resize
 from sklearn.datasets.base import Bunch
 
@@ -17,6 +19,30 @@ import fcn
 
 
 this_dir = osp.dirname(osp.realpath(__file__))
+
+
+def transform(img, cropping_size=24, scaling_size=28):
+    # cropping
+    for offset_y in range(0, 8 + 4, 4):
+        for offset_x in range(0, 8 + 4, 4):
+            im = img[offset_y:offset_y + cropping_size,
+                     offset_x:offset_x + cropping_size]
+            # global contrast normalization
+            im = im.astype(np.float)
+            im -= im.reshape(-1, 3).mean(axis=0)
+            im -= im.reshape(-1, 3).std(axis=0) + 1e-5
+
+    # scaling
+    for offset_y in range(0, 4 + 2, 2):
+        for offset_x in range(0, 4 + 2, 2):
+            im = img[offset_y:offset_y + scaling_size,
+                     offset_x:offset_x + scaling_size]
+            im = imresize(im, (cropping_size, cropping_size),
+                          'nearest')
+            # global contrast normalization
+            im = im.astype(np.float)
+            im -= im.reshape(-1, 3).mean(axis=0)
+            im -= im.reshape(-1, 3).std(axis=0) + 1e-5
 
 
 class APC2015(Bunch):
@@ -83,25 +109,37 @@ class APC2015(Bunch):
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
 
+    @staticmethod
+    def _rgb_to_blob(rgb):
+        rgb = rgb.astype(np.float64)
+        blob = rgb[:, :, ::-1]  # RGB-> BGR
+        blob -= np.array((104.00698793, 116.66876762, 122.67891434))
+        blob = resize(blob, (224, 224), preserve_range=True)
+        blob = blob.transpose((2, 0, 1))
+        return blob
+
     def next_batch(self, batch_size):
         n_data = len(self.ids)
         indices = np.random.randint(0, n_data, batch_size)
-        batch_data = []
+        x, t = [], []
         for index in indices:
             id_ = self.ids[index]
-            datum = self.db.get(str(id_))
-            if datum is None:
+            xt = self.db.get(str(id_))
+            if xt is None:
                 ti = self.target[index]
                 img_file = self.img_files[index]
                 mask_file = self.mask_files[index]
                 img = imread(img_file, mode='RGB')
                 mask = imread(mask_file, mode='L')
-                xi = fcn.util.apply_mask(img, mask, crop=True)
-                xi = xi.astype(np.float64)
-                xi = xi[:, :, ::-1]  # RGB -> BGR
-                xi -= np.array((104.00698793, 116.66876762, 122.67891434))
-                xi = resize(xi, (224, 224), preserve_range=True)
-                xi = xi.transpose((2, 0, 1))
-                datum = {'x': xi, 't': ti}
-            batch_data.append(datum)
-        return batch_data
+                img = fcn.util.apply_mask(img, mask, crop=True)
+                transform(img)
+                xi = self._rgb_to_blob(img)
+                xt = {'x': xi, 't': ti}
+                self.db.put(str(id_), pickle.dumps(xt))
+            else:
+                xt = pickle.loads(xt)
+            x.append(xt['x'])
+            t.append(xt['t'])
+        x = np.array(x, dtype=np.float32)
+        t = np.array(t, dtype=np.int32)
+        return x, t
