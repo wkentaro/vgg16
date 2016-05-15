@@ -8,6 +8,7 @@ import glob
 import os.path as osp
 import re
 
+import matplotlib.pyplot as plt
 import numpy as np
 import plyvel
 from scipy.misc import imread
@@ -54,13 +55,14 @@ class APC2015(Bunch):
             'sharpie_accent_tank_style_highlighters',
             'stanley_66_052',
         ]
+        self.mean_bgr = np.array((104.00698793, 116.66876762, 122.67891434))
 
         self.ids = []
         self.img_files = []
         self.mask_files = []
         self.target = []
 
-        self._load_berkeley()
+        # self._load_berkeley()
         self._load_rbo()
 
         self.ids = np.array(self.ids)
@@ -106,19 +108,25 @@ class APC2015(Bunch):
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
 
-    @staticmethod
-    def _rgb_to_blob(rgb):
+    def rgb_to_blob(self, rgb):
         rgb = rgb.astype(np.float64)
         blob = rgb[:, :, ::-1]  # RGB-> BGR
-        blob -= np.array((104.00698793, 116.66876762, 122.67891434))
+        blob -= self.mean_bgr
         blob = resize(blob, (224, 224), preserve_range=True)
         blob = blob.transpose((2, 0, 1))
         return blob
 
+    def blob_to_rgb(self, blob):
+        bgr = blob.transpose((1, 2, 0))
+        bgr += self.mean_bgr
+        rgb = bgr[:, :, ::-1]  # BGR -> RGB
+        rgb = rgb.astype(np.uint8)
+        return rgb
+
     def next_batch(self, batch_size, type, type_indices=None):
         assert type in ('train', 'test')
         indices = getattr(self, type)
-        n_data = len(type_indices)
+        n_data = len(indices)
         if type_indices is None:
             type_indices = np.random.randint(0, n_data, batch_size)
         type_selected = indices[type_indices]
@@ -132,8 +140,9 @@ class APC2015(Bunch):
                 mask_file = self.mask_files[index]
                 img = imread(img_file, mode='RGB')
                 mask = imread(mask_file, mode='L')
-                img = fcn.util.apply_mask(img, mask, crop=True)
-                xi = self._rgb_to_blob(img)
+                img = fcn.util.apply_mask(img, mask, crop=True,
+                                          fill_black=False)
+                xi = self.rgb_to_blob(img)
                 xt = {'x': xi, 't': ti}
                 self.db.put(str(id_), pickle.dumps(xt))
             else:
@@ -152,3 +161,8 @@ if __name__ == '__main__':
           len([id_ for id_ in dataset.ids if id_.startswith('berkeley/')]))
     print('rbo data:',
           len([id_ for id_ in dataset.ids if id_.startswith('rbo/')]))
+    x, _ = dataset.next_batch(batch_size=1, type='train')
+    x = x[0]
+    rgb = dataset.blob_to_rgb(x)
+    plt.imshow(rgb)
+    plt.show()
