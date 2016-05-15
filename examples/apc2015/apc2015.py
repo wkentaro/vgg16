@@ -11,10 +11,9 @@ import re
 import numpy as np
 import plyvel
 from scipy.misc import imread
-from scipy.misc import imresize
 from skimage.transform import resize
-from sklearn.datasets.base import Bunch
 from sklearn.cross_validation import train_test_split
+from sklearn.datasets.base import Bunch
 
 import fcn
 
@@ -70,8 +69,9 @@ class APC2015(Bunch):
         self.target = np.array(self.target)
 
         seed = np.random.RandomState(1234)
+        indices = np.arange(len(self.ids))
         self.train, self.test = train_test_split(
-            self.ids, test_size=0.2, random_state=seed)
+            indices, test_size=0.2, random_state=seed)
 
     def _load_berkeley(self):
         """Load APC2015berkeley dataset"""
@@ -100,8 +100,6 @@ class APC2015(Bunch):
                 img_id = re.sub('_{0}.pbm'.format(label_name), '',
                                 osp.basename(mask_file))
                 img_file = osp.join(dataset_dir, label_name, img_id + '.jpg')
-                img = imread(img_file, mode='RGB')
-                mask = imread(mask_file, mode='L')
                 id_ = osp.join('rbo', img_id)
                 self.ids.append(id_)
                 self.img_files.append(img_file)
@@ -117,15 +115,16 @@ class APC2015(Bunch):
         blob = blob.transpose((2, 0, 1))
         return blob
 
-    def next_batch(self, batch_size, type):
+    def next_batch(self, batch_size, type, type_indices=None):
         assert type in ('train', 'test')
-        type_indices = getattr(self, type)
-        n_data = len(indices)
-        type_selected_indices = np.random.randint(0, n_data, batch_size)
-        type_selected = type_indices[type_selected_indices]
+        indices = getattr(self, type)
+        n_data = len(type_indices)
+        if type_indices is None:
+            type_indices = np.random.randint(0, n_data, batch_size)
+        type_selected = indices[type_indices]
         x, t = [], []
         for index in type_selected:
-            id_ = ids[index]
+            id_ = self.ids[index]
             xt = self.db.get(str(id_))
             if xt is None:
                 ti = self.target[index]

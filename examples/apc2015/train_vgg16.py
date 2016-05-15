@@ -49,15 +49,58 @@ if not osp.exists(save_dir):
 
 
 f = open(osp.join(save_dir, 'log.csv'), 'w')
-print('i_iter,loss,acc', file=f)
-csv_templ = '{i_iter},{loss},{acc}'
-display_templ = '{i_iter}: loss={loss}, acc={acc}'
+print('i_iter,type,loss,acc', file=f)
+csv_templ = '{i_iter},{type},{loss},{acc}'
+display_templ = '{i_iter}: type={type}, loss={loss}, acc={acc}'
 
 
+test_interval = 1000
+snapshot = 4000
 max_iteration = 100000
 batch_size = 20
 for i_iter in xrange(0, max_iteration, batch_size):
-    x, t = dataset.next_batch(batch_size=batch_size)
+    # -------------------------------------------------------------
+    # snapshot
+    # -------------------------------------------------------------
+    if i_iter % snapshot == 0:
+        S.save_hdf5(
+            osp.join(save_dir, 'vgg16_{0}.chainermodel'.format(i_iter)),
+            model)
+        S.save_hdf5(
+            osp.join(save_dir, 'vgg16_optimizer_{0}.h5'.format(i_iter)),
+            optimizer)
+    # -------------------------------------------------------------
+    # test
+    # -------------------------------------------------------------
+    if i_iter % test_interval == 0:
+        n_data = len(dataset.test)
+        sum_loss, sum_acc = 0, 0
+        for index_start in xrange(0, n_data, batch_size):
+            index_stop = min(index_start + batch_size, n_data)
+            type_indices = range(index_start, index_stop)
+            x, t = dataset.next_batch(
+                batch_size=batch_size, type='test', type_indices=type_indices)
+            x = cuda.to_gpu(x)
+            x = Variable(x, volatile=True)
+            t = cuda.to_gpu(t)
+            t = Variable(t, volatile=True)
+            optimizer.zero_grads()
+            model.train = False
+            model(x, t)
+            sum_loss += float(model.loss.data)
+            sum_acc += float(model.acc.data)
+        log = dict(
+            i_iter=i_iter,
+            type=type,
+            loss=sum_loss / n_data,
+            acc=sum_acc / n_data,
+        )
+        print(display_templ.format(**log))
+        print(csv_templ.format(**log), file=f)
+    # -------------------------------------------------------------
+    # train
+    # -------------------------------------------------------------
+    x, t = dataset.next_batch(batch_size=batch_size, type='train')
     x = cuda.to_gpu(x)
     x = Variable(x, volatile=False)
     t = cuda.to_gpu(t)
@@ -72,5 +115,6 @@ for i_iter in xrange(0, max_iteration, batch_size):
     )
     print(display_templ.format(**log))
     print(csv_templ.format(**log), file=f)
+
 
 f.close()
