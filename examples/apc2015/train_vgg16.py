@@ -77,8 +77,9 @@ for i_iter in xrange(0, max_iteration, batch_size):
         n_data = len(dataset.test)
         sum_loss, sum_acc = 0, 0
         desc = '{0}: test iteration'.format(i_iter)
-        for index_start in tqdm.tqdm(xrange(0, n_data, batch_size),
-                                     ncols=80, desc=desc):
+        pbar = tqdm.tqdm(total=n_data, ncols=80, desc=desc)
+        for index_start in xrange(0, n_data, batch_size):
+            pbar.update(batch_size)
             index_stop = min(index_start + batch_size, n_data)
             type_indices = range(index_start, index_stop)
             x, t = dataset.next_batch(
@@ -92,9 +93,10 @@ for i_iter in xrange(0, max_iteration, batch_size):
             model(x, t)
             sum_loss += float(model.loss.data)
             sum_acc += float(model.acc.data)
+        pbar.close()
         log = dict(
             i_iter=i_iter,
-            type=type,
+            type='test',
             loss=sum_loss / n_data,
             acc=sum_acc / n_data,
         )
@@ -113,7 +115,7 @@ for i_iter in xrange(0, max_iteration, batch_size):
     optimizer.update(model, x, t)
     log = dict(
         i_iter=i_iter,
-        type=type,
+        type='train',
         loss=float(model.loss.data),
         acc=float(model.acc.data),
     )
