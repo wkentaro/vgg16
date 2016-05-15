@@ -14,6 +14,7 @@ from scipy.misc import imread
 from scipy.misc import imresize
 from skimage.transform import resize
 from sklearn.datasets.base import Bunch
+from sklearn.cross_validation import train_test_split
 
 import fcn
 
@@ -22,8 +23,6 @@ this_dir = osp.dirname(osp.realpath(__file__))
 
 
 class APC2015(Bunch):
-
-    berkeley_dataset_dir = osp.join(this_dir, 'dataset/APC2015berkeley')
 
     def __init__(self, db_path):
         self.db = plyvel.DB(db_path, create_if_missing=True)
@@ -63,21 +62,27 @@ class APC2015(Bunch):
         self.target = []
 
         self._load_berkeley()
+        self._load_rbo()
 
         self.ids = np.array(self.ids)
         self.img_files = np.array(self.img_files)
         self.mask_files = np.array(self.mask_files)
         self.target = np.array(self.target)
 
+        seed = np.random.RandomState(1234)
+        self.train, self.test = train_test_split(
+            self.ids, test_size=0.2, random_state=seed)
+
     def _load_berkeley(self):
-        # APC2015berkeley dataset
+        """Load APC2015berkeley dataset"""
+        dataset_dir = osp.join(this_dir, 'dataset/APC2015berkeley')
         for label_value, label_name in enumerate(self.target_names):
             img_file_glob = osp.join(
-                self.berkeley_dataset_dir, label_name, '*.jpg')
+                dataset_dir, label_name, '*.jpg')
             for img_file in glob.glob(img_file_glob):
                 img_id = re.sub('.jpg$', '', osp.basename(img_file))
                 mask_file = osp.join(
-                    self.berkeley_dataset_dir, label_name, 'masks',
+                    dataset_dir, label_name, 'masks',
                     img_id + '_mask.jpg')
                 id_ = osp.join('berkeley', label_name, img_id)
                 self.ids.append(id_)
@@ -86,7 +91,22 @@ class APC2015(Bunch):
                 self.target.append(label_value)
 
     def _load_rbo(self):
-        pass
+        """Load APC2015rbo dataset"""
+        dataset_dir = osp.join(this_dir, 'dataset/APC2015rbo/berlin_selected')
+        for label_value, label_name in enumerate(self.target_names):
+            mask_file_glob = osp.join(dataset_dir, label_name,
+                                      '*_{0}.pbm'.format(label_name))
+            for mask_file in glob.glob(mask_file_glob):
+                img_id = re.sub('_{0}.pbm'.format(label_name), '',
+                                osp.basename(mask_file))
+                img_file = osp.join(dataset_dir, label_name, img_id + '.jpg')
+                img = imread(img_file, mode='RGB')
+                mask = imread(mask_file, mode='L')
+                id_ = osp.join('rbo', img_id)
+                self.ids.append(id_)
+                self.img_files.append(img_file)
+                self.mask_files.append(mask_file)
+                self.target.append(label_value)
 
     @staticmethod
     def _rgb_to_blob(rgb):
@@ -97,12 +117,15 @@ class APC2015(Bunch):
         blob = blob.transpose((2, 0, 1))
         return blob
 
-    def next_batch(self, batch_size):
-        n_data = len(self.ids)
-        indices = np.random.randint(0, n_data, batch_size)
+    def next_batch(self, batch_size, type):
+        assert type in ('train', 'test')
+        type_indices = getattr(self, type)
+        n_data = len(indices)
+        type_selected_indices = np.random.randint(0, n_data, batch_size)
+        type_selected = type_indices[type_selected_indices]
         x, t = [], []
-        for index in indices:
-            id_ = self.ids[index]
+        for index in type_selected:
+            id_ = ids[index]
             xt = self.db.get(str(id_))
             if xt is None:
                 ti = self.target[index]
@@ -121,3 +144,12 @@ class APC2015(Bunch):
         x = np.array(x, dtype=np.float32)
         t = np.array(t, dtype=np.int32)
         return x, t
+
+
+if __name__ == '__main__':
+    import tempfile
+    dataset = APC2015(tempfile.mktemp())
+    print('berkeley data:',
+          len([id_ for id_ in dataset.ids if id_.startswith('berkeley/')]))
+    print('rbo data:',
+          len([id_ for id_ in dataset.ids if id_.startswith('rbo/')]))
