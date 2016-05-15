@@ -91,14 +91,14 @@ for i_iter in xrange(0, max_iteration, batch_size):
             optimizer.zero_grads()
             model.train = False
             model(x, t)
-            sum_loss += float(model.loss.data)
-            sum_acc += float(model.acc.data)
+            sum_loss += (float(model.loss.data) * len(x.data))
+            sum_acc += (float(model.acc.data) * len(x.data))
         pbar.close()
         log = dict(
             i_iter=i_iter,
             type='test',
-            loss=sum_loss / n_data,
-            acc=sum_acc / n_data,
+            loss=(sum_loss / n_data),
+            acc=(sum_acc / n_data),
         )
         print(display_templ.format(**log))
         print(csv_templ.format(**log), file=f)
