@@ -12,6 +12,7 @@ import chainer.optimizers as O
 import chainer.serializers as S
 from chainer import Variable
 import numpy as np
+import tqdm
 
 import apc2015
 import fcn
@@ -75,7 +76,9 @@ for i_iter in xrange(0, max_iteration, batch_size):
     if i_iter % test_interval == 0:
         n_data = len(dataset.test)
         sum_loss, sum_acc = 0, 0
-        for index_start in xrange(0, n_data, batch_size):
+        desc = '{0}: test iteration'.format(i_iter)
+        for index_start in tqdm.tqdm(xrange(0, n_data, batch_size),
+                                     ncols=80, desc=desc):
             index_stop = min(index_start + batch_size, n_data)
             type_indices = range(index_start, index_stop)
             x, t = dataset.next_batch(
