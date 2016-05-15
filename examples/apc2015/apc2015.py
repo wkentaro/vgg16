@@ -62,7 +62,7 @@ class APC2015(Bunch):
         self.mask_files = []
         self.target = []
 
-        # self._load_berkeley()
+        self._load_berkeley()
         self._load_rbo()
 
         self.ids = np.array(self.ids)
