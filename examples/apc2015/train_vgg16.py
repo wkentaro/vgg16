@@ -113,6 +113,7 @@ for i_iter in xrange(0, max_iteration, batch_size):
     optimizer.update(model, x, t)
     log = dict(
         i_iter=i_iter,
+        type=type,
         loss=float(model.loss.data),
         acc=float(model.acc.data),
     )
