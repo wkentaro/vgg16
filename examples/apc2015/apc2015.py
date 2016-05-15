@@ -21,30 +21,6 @@ import fcn
 this_dir = osp.dirname(osp.realpath(__file__))
 
 
-def transform(img, cropping_size=24, scaling_size=28):
-    # cropping
-    for offset_y in range(0, 8 + 4, 4):
-        for offset_x in range(0, 8 + 4, 4):
-            im = img[offset_y:offset_y + cropping_size,
-                     offset_x:offset_x + cropping_size]
-            # global contrast normalization
-            im = im.astype(np.float)
-            im -= im.reshape(-1, 3).mean(axis=0)
-            im -= im.reshape(-1, 3).std(axis=0) + 1e-5
-
-    # scaling
-    for offset_y in range(0, 4 + 2, 2):
-        for offset_x in range(0, 4 + 2, 2):
-            im = img[offset_y:offset_y + scaling_size,
-                     offset_x:offset_x + scaling_size]
-            im = imresize(im, (cropping_size, cropping_size),
-                          'nearest')
-            # global contrast normalization
-            im = im.astype(np.float)
-            im -= im.reshape(-1, 3).mean(axis=0)
-            im -= im.reshape(-1, 3).std(axis=0) + 1e-5
-
-
 class APC2015(Bunch):
 
     berkeley_dataset_dir = osp.join(this_dir, 'dataset/APC2015berkeley')
@@ -109,6 +85,9 @@ class APC2015(Bunch):
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
 
+    def _load_rbo(self):
+        pass
+
     @staticmethod
     def _rgb_to_blob(rgb):
         rgb = rgb.astype(np.float64)
@@ -132,7 +111,6 @@ class APC2015(Bunch):
                 img = imread(img_file, mode='RGB')
                 mask = imread(mask_file, mode='L')
                 img = fcn.util.apply_mask(img, mask, crop=True)
-                transform(img)
                 xi = self._rgb_to_blob(img)
                 xt = {'x': xi, 't': ti}
                 self.db.put(str(id_), pickle.dumps(xt))

@@ -15,7 +15,9 @@ import numpy as np
 
 import apc2015
 import fcn
-from fcn.models import VGG16
+import fcn.models
+import fcn.util
+from vgg16 import VGG16
 
 
 this_dir = osp.dirname(osp.realpath(__file__))
@@ -27,10 +29,13 @@ n_class = len(dataset.target_names)
 
 
 model_path = fcn.setup.download_vgg16_chainermodel()
+vgg16_orig = fcn.models.VGG16()
+S.load_hdf5(model_path, vgg16_orig)
+del vgg16_orig.fc8
+vgg16_orig.add_link('fc8', L.Linear(4096, n_class))
+
 model = VGG16()
-S.load_hdf5(model_path, model)
-del model.fc8
-model.add_link('fc8', L.Linear(4096, n_class))
+fcn.util.copy_chainermodel(vgg16_orig, model)
 model.to_gpu()
 
 
@@ -50,7 +55,7 @@ display_templ = '{i_iter}: loss={loss}, acc={acc}'
 
 
 max_iteration = 100000
-batch_size = 10
+batch_size = 20
 for i_iter in xrange(0, max_iteration, batch_size):
     x, t = dataset.next_batch(batch_size=batch_size)
     x = cuda.to_gpu(x)
