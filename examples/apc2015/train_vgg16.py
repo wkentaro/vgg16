@@ -32,10 +32,8 @@ n_class = len(dataset.target_names)
 model_path = fcn.setup.download_vgg16_chainermodel()
 vgg16_orig = fcn.models.VGG16()
 S.load_hdf5(model_path, vgg16_orig)
-del vgg16_orig.fc8
-vgg16_orig.add_link('fc8', L.Linear(4096, n_class))
 
-model = VGG16()
+model = VGG16(n_class=n_class)
 fcn.util.copy_chainermodel(vgg16_orig, model)
 model.to_gpu()
 
