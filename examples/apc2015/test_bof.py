@@ -25,40 +25,33 @@ from imagesift import draw_sift_frames
 
 dataset = apc2015.APC2015('leveldb')
 
-with gzip.open('apc2015_bof.pkl.gz', 'rb') as f:
+with gzip.open('bof_trained_data/apc2015_bof.pkl.gz', 'rb') as f:
     bof = pickle.load(f)
     if 'n_jobs' not in bof.nn.__dict__:
         bof.nn.n_jobs = 1
 
-with gzip.open('apc2015_lgr.pkl.gz', 'rb') as f:
+with gzip.open('bof_trained_data/apc2015_lgr.pkl.gz', 'rb') as f:
     lgr = pickle.load(f)
 
-accuracies = []
-batch_size = 10
-for index_start in xrange(0, len(dataset.test), batch_size):
-    index_end = min(len(dataset.test), index_start + batch_size)
-    test_indices = dataset.test[range(index_start, index_end)]
+y_true = []
+y_pred = []
+for index in dataset.test:
+    gray = imread(dataset.img_files[index], mode='L')
+    if dataset.mask_files[index] is not None:
+        mask = imread(dataset.mask_files[index], mode='L')
+        gray = fcn.util.apply_mask(gray, mask, crop=True)
+    frames, desc = get_sift_keypoints(gray)
+    if desc.size == 0:
+        continue
+    # for inserted 'background' label at index 0
+    y_true.append(dataset.target[index] - 1)
 
-    y_true = []
-    descs = []
-    for index in test_indices:
-        gray = imread(dataset.img_files[index], mode='L')
-        if dataset.mask_files[index] is not None:
-            mask = imread(dataset.mask_files[index], mode='L')
-            gray = fcn.util.apply_mask(gray, mask, crop=True)
-        frames, desc = get_sift_keypoints(gray)
-        if desc.size == 0:
-            continue
-        y_true.append(dataset.target[index])
-        descs.append(desc)
-
-    X = bof.transform(descs)
+    X = bof.transform([desc])
     normalize(X, copy=False)
 
-    y_proba = lgr.predict_proba(X)
-    y_pred = np.argmax(y_proba, axis=-1)
-    acc = accuracy_score(y_true, y_pred)
-    print('{0}: accuracy={1}'.format(index_start, acc))
-    accuracies.extend([acc] * len(test_indices))
+    y_proba = lgr.predict_proba(X)[0]
+    assert len(y_proba) == len(dataset.target_names[1:])
+    y_pred.append(np.argmax(y_proba))
 
-print('Mean Accuracy: {0}'.format(np.array(accuracies).mean()))
+acc = accuracy_score(y_true, y_pred)
+print('Mean Accuracy: {0}'.format(acc))

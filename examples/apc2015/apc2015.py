@@ -95,7 +95,8 @@ class APC2015(Bunch):
                     img_id + '_mask.jpg')
                 id_ = osp.join('berkeley', label_name, img_id)
                 self.ids.append(id_)
-                self.datasets['berkeley'].append(id_)
+                dataset_index = len(self.ids) - 1
+                self.datasets['berkeley'].append(dataset_index)
                 self.img_files.append(img_file)
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
@@ -112,7 +113,8 @@ class APC2015(Bunch):
                 img_file = osp.join(dataset_dir, label_name, img_id + '.jpg')
                 id_ = osp.join('rbo', img_id)
                 self.ids.append(id_)
-                self.datasets['rbo'].append(id_)
+                dataset_index = len(self.ids) - 1
+                self.datasets['rbo'].append(dataset_index)
                 self.img_files.append(img_file)
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
@@ -128,7 +130,8 @@ class APC2015(Bunch):
                 img_id = re.sub('.jpg$', '', osp.basename(img_file))
                 id_ = osp.join('jsk20150428', img_id)
                 self.ids.append(id_)
-                self.datasets['jsk20150428'].append(id_)
+                dataset_index = len(self.ids) - 1
+                self.datasets['jsk20150428'].append(dataset_index)
                 self.img_files.append(img_file)
                 self.mask_files.append(None)
                 self.target.append(label_value)
