@@ -3,6 +3,7 @@
 from __future__ import division
 from __future__ import print_function
 
+from collections import defaultdict
 import cPickle as pickle
 import glob
 import os.path as osp
@@ -62,8 +63,12 @@ class APC2015(Bunch):
         self.mask_files = []
         self.target = []
 
+        self.datasets = defaultdict(list)
         self._load_berkeley()
         self._load_rbo()
+        self._load_jsk20150428()
+        for name, ids in self.datasets.items():
+            print('Loaded {0}: {1}'.format(name, len(ids)))
 
         self.ids = np.array(self.ids)
         self.img_files = np.array(self.img_files)
@@ -81,13 +86,16 @@ class APC2015(Bunch):
         for label_value, label_name in enumerate(self.target_names):
             img_file_glob = osp.join(
                 dataset_dir, label_name, '*.jpg')
-            for img_file in glob.glob(img_file_glob):
+            for i, img_file in enumerate(glob.glob(img_file_glob)):
+                if i % 15 != 0:
+                    continue
                 img_id = re.sub('.jpg$', '', osp.basename(img_file))
                 mask_file = osp.join(
                     dataset_dir, label_name, 'masks',
                     img_id + '_mask.jpg')
                 id_ = osp.join('berkeley', label_name, img_id)
                 self.ids.append(id_)
+                self.datasets['berkeley'].append(id_)
                 self.img_files.append(img_file)
                 self.mask_files.append(mask_file)
                 self.target.append(label_value)
@@ -104,8 +112,25 @@ class APC2015(Bunch):
                 img_file = osp.join(dataset_dir, label_name, img_id + '.jpg')
                 id_ = osp.join('rbo', img_id)
                 self.ids.append(id_)
+                self.datasets['rbo'].append(id_)
                 self.img_files.append(img_file)
                 self.mask_files.append(mask_file)
+                self.target.append(label_value)
+
+    def _load_jsk20150428(self):
+        """Load jsk 20150428 dataset"""
+        dataset_dir = osp.join(this_dir, 'dataset/jsk20150428')
+        for label_value, label_name in enumerate(self.target_names):
+            img_file_glob = osp.join(dataset_dir, label_name, '*.jpg')
+            for i, img_file in enumerate(glob.glob(img_file_glob)):
+                if i % 15 != 0:
+                    continue
+                img_id = re.sub('.jpg$', '', osp.basename(img_file))
+                id_ = osp.join('jsk20150428', img_id)
+                self.ids.append(id_)
+                self.datasets['jsk20150428'].append(id_)
+                self.img_files.append(img_file)
+                self.mask_files.append(None)
                 self.target.append(label_value)
 
     def rgb_to_blob(self, rgb):
@@ -139,9 +164,10 @@ class APC2015(Bunch):
                 img_file = self.img_files[index]
                 mask_file = self.mask_files[index]
                 img = imread(img_file, mode='RGB')
-                mask = imread(mask_file, mode='L')
-                img = fcn.util.apply_mask(img, mask, crop=True,
-                                          fill_black=False)
+                if mask_file is not None:
+                    mask = imread(mask_file, mode='L')
+                    img = fcn.util.apply_mask(img, mask, crop=True,
+                                            fill_black=False)
                 xi = self.rgb_to_blob(img)
                 xt = {'x': xi, 't': ti}
                 self.db.put(str(id_), pickle.dumps(xt))
