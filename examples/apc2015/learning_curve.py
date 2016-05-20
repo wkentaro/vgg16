@@ -1,17 +1,21 @@
 #!/usr/bin/env python
 
 import argparse
+import os
+from datetime import datetime
 
-import pandas as pd
 import matplotlib
-matplotlib.use('Agg')
+if not os.environ.get('DISPLAY'):  # NOQA
+    matplotlib.use('Agg')  # NOQA
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
+import tempfile
 
 
-def learning_curve(csv_file):
+def learning_curve(csv_file, out_figure):
     df = pd.read_csv(csv_file)
-    df_train  = df.query("type == 'train'")
+    df_train = df.query("type == 'train'")
     df_val = df.query("type == 'test'")
 
     colors = sns.husl_palette(3, l=.5, s=.5)
@@ -24,18 +28,18 @@ def learning_curve(csv_file):
 
     # train loss
     plt.subplot(221)
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-    plt.plot(df_train.i_iter, df_train.loss, '-', markersize=1, color=colors[0],
-             alpha=.5, label='train loss')
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+    plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    plt.plot(df_train.i_iter, df_train.loss, '-', markersize=1,
+             color=colors[0], alpha=.5, label='train loss')
     plt.xlabel('iteration')
     plt.ylabel('train loss')
 
     # train accuracy
     plt.subplot(222)
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.plot(df_train.i_iter, df_train.acc, '-', markersize=1, color=colors[1],
-             alpha=.5, label='train accuracy')
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+    plt.plot(df_train.i_iter, df_train.acc, '-', markersize=1,
+             color=colors[1], alpha=.5, label='train accuracy')
     plt.xlabel('iteration')
     plt.ylabel('train overall accuracy')
 
@@ -45,8 +49,8 @@ def learning_curve(csv_file):
 
     # val loss
     plt.subplot(223)
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-    plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+    plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
     plt.plot(df_val.i_iter, df_val.loss, 'o-', color=colors[0],
              alpha=.5, label='val loss')
     plt.xlabel('iteration')
@@ -54,21 +58,28 @@ def learning_curve(csv_file):
 
     # val accuracy
     plt.subplot(224)
-    plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+    plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
     plt.plot(df_val.i_iter, df_val.acc, 'o-', color=colors[1],
              alpha=.5, label='val accuracy')
     plt.xlabel('iteration')
     plt.ylabel('val overall accuracy')
 
-    plt.savefig('plot.png')
-    print('Saved plot.png')
+    plt.savefig(out_figure)
+    print("Saved as '{0}'".format(out_figure))
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('csv_file')
+    parser.add_argument('-o', '--output')
     args = parser.parse_args()
-    learning_curve(args.csv_file)
+
+    csv_file = args.csv_file
+    output = args.output
+
+    if output is None:
+        output = os.path.splitext(csv_file)[0] + '.png'
+    learning_curve(csv_file, output)
 
 
 if __name__ == '__main__':
