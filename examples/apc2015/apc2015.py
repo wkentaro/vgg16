@@ -8,12 +8,14 @@ import cPickle as pickle
 import glob
 import os.path as osp
 import re
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import plyvel
 from scipy.misc import imread
-from skimage.transform import resize
+import skimage.morphology
+import skimage.transform
 from sklearn.cross_validation import train_test_split
 from sklearn.datasets.base import Bunch
 
@@ -26,6 +28,8 @@ this_dir = osp.dirname(osp.realpath(__file__))
 class APC2015(Bunch):
 
     def __init__(self, db_path):
+        self.n_transforms = 6
+        self.transform_random_range = 0.1
         self.db = plyvel.DB(db_path, create_if_missing=True)
 
         self.target_names = [
@@ -69,6 +73,7 @@ class APC2015(Bunch):
         self._load_jsk20150428()
         for name, ids in self.datasets.items():
             print('Loaded {0}: {1}'.format(name, len(ids)))
+        assert len(self.ids) == len(set(self.ids))
 
         self.ids = np.array(self.ids)
         self.img_files = np.array(self.img_files)
@@ -111,7 +116,7 @@ class APC2015(Bunch):
                 img_id = re.sub('_{0}.pbm'.format(label_name), '',
                                 osp.basename(mask_file))
                 img_file = osp.join(dataset_dir, label_name, img_id + '.jpg')
-                id_ = osp.join('rbo', img_id)
+                id_ = osp.join('rbo', label_name, img_id)
                 self.ids.append(id_)
                 dataset_index = len(self.ids) - 1
                 self.datasets['rbo'].append(dataset_index)
@@ -128,7 +133,7 @@ class APC2015(Bunch):
                 if i % 15 != 0:
                     continue
                 img_id = re.sub('.jpg$', '', osp.basename(img_file))
-                id_ = osp.join('jsk20150428', img_id)
+                id_ = osp.join('jsk20150428', label_name, img_id)
                 self.ids.append(id_)
                 dataset_index = len(self.ids) - 1
                 self.datasets['jsk20150428'].append(dataset_index)
@@ -137,10 +142,10 @@ class APC2015(Bunch):
                 self.target.append(label_value)
 
     def rgb_to_blob(self, rgb):
-        rgb = rgb.astype(np.float64)
+        rgb = rgb.astype(np.float32)
         blob = rgb[:, :, ::-1]  # RGB-> BGR
         blob -= self.mean_bgr
-        blob = resize(blob, (224, 224), preserve_range=True)
+        blob = skimage.transform.resize(blob, (224, 224), preserve_range=True)
         blob = blob.transpose((2, 0, 1))
         return blob
 
@@ -150,6 +155,66 @@ class APC2015(Bunch):
         rgb = bgr[:, :, ::-1]  # BGR -> RGB
         rgb = rgb.astype(np.uint8)
         return rgb
+
+    def _get_inputs(self, index, type):
+        """Get inputs with global index (global means self.ids[index] works)"""
+        # prepare inputs:
+        #   1. load image and mask
+        #   2. transform image
+        #   3. apply mask to image and crop
+        #   4. convert cropped image to blob
+        #   5. save to db
+        img = imread(self.img_files[index], mode='RGB')
+        img, _ = fcn.util.resize_img_with_max_size(
+            img, max_size=1000*2000)
+        # apply mask if needed
+        mask = None
+        if self.mask_files[index] is not None:
+            mask = imread(self.mask_files[index], mode='L')
+            mask, _ = fcn.util.resize_img_with_max_size(
+                mask, max_size=1000*2000)
+            # opening operation is required mask image with noise
+            mask = skimage.morphology.opening(
+                mask, selem=skimage.morphology.square(3))
+            if mask.sum() == 0:
+                print("Skipping '{file}' ({id}) because of no ROI mask"
+                      .format(id=id_, file=self.mask_files[index]),
+                      file=sys.stderr)
+                return
+            where = np.argwhere(mask)
+            y_start, x_start = where.min(0)
+            y_stop, x_stop = where.max(0) + 1
+            height = y_stop - y_start
+            width = x_stop - x_start
+        height, width = img.shape[:2]
+        # prepare transformed images
+        if mask is None:
+            cropped = img.copy()
+        else:
+            cropped = fcn.util.apply_mask(
+                img, mask, crop=True, fill_black=False)
+        # restore image without transformation first
+        inputs = [self.rgb_to_blob(cropped)]
+        for _ in xrange(self.n_transforms):
+            if type == 'test':
+                # transformation is not necessary for test images
+                break
+            translation = (
+                int(self.transform_random_range *
+                    np.random.random() * height),
+                int(self.transform_random_range *
+                    np.random.random() * width))
+            tform = skimage.transform.SimilarityTransform(
+                translation=translation)
+            img_trans = skimage.transform.warp(
+                img, tform, mode='edge', preserve_range=True)
+            if mask is None:
+                cropped = img_trans.copy()
+            else:
+                cropped = fcn.util.apply_mask(
+                    img_trans, mask, crop=True, fill_black=False)
+            inputs.append(self.rgb_to_blob(cropped))
+        return inputs
 
     def next_batch(self, batch_size, type, type_indices=None):
         assert type in ('train', 'test')
@@ -161,23 +226,22 @@ class APC2015(Bunch):
         x, t = [], []
         for index in type_selected:
             id_ = self.ids[index]
-            xt = self.db.get(str(id_))
-            if xt is None:
-                ti = self.target[index]
-                img_file = self.img_files[index]
-                mask_file = self.mask_files[index]
-                img = imread(img_file, mode='RGB')
-                if mask_file is not None:
-                    mask = imread(mask_file, mode='L')
-                    img = fcn.util.apply_mask(img, mask, crop=True,
-                                            fill_black=False)
-                xi = self.rgb_to_blob(img)
-                xt = {'x': xi, 't': ti}
-                self.db.put(str(id_), pickle.dumps(xt))
+            inputs = self.db.get(str(id_))
+            if inputs is not None:
+                # use cached data
+                inputs = pickle.loads(inputs)
             else:
-                xt = pickle.loads(xt)
-            x.append(xt['x'])
-            t.append(xt['t'])
+                inputs = self._get_inputs(index, type=type)
+                if inputs is None:
+                    continue
+                # save to db
+                self.db.put(str(id_), pickle.dumps(inputs))
+            if type == 'test':
+                blob = inputs[0]
+            else:
+                blob = inputs[np.random.randint(self.n_transforms+1)]
+            x.append(blob)
+            t.append(self.target[index])
         x = np.array(x, dtype=np.float32)
         t = np.array(t, dtype=np.int32)
         return x, t
