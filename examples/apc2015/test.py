@@ -47,9 +47,11 @@ def draw_test_result(dataset, fname, x_data, label_true, label_pred, n_class):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('chainermodel')
     parser.add_argument('--gpu', type=int, default=0)
     args = parser.parse_args()
 
+    chainermodel = args.chainermodel
     gpu = args.gpu
 
     save_dir = 'test_result'
@@ -60,12 +62,13 @@ def main():
     n_class = len(dataset.target_names)
 
     model = VGG16(n_class=n_class)
-    S.load_hdf5('snapshot/vgg16_96000.chainermodel', model)
+    S.load_hdf5(chainermodel, model)
     if gpu != -1:
         model.to_gpu(gpu)
 
     batch_size = 25
     index = 0
+    sum_accuracy = 0
     for index_start in xrange(0, len(dataset.test), batch_size):
         indices = range(index_start,
                         min(len(dataset.test), index_start + batch_size))
@@ -80,16 +83,19 @@ def main():
 
         x_data = cuda.to_cpu(x.data)
         accuracy = float(cuda.to_cpu(model.acc.data))
+        sum_accuracy += accuracy * len(x_data)
         score = cuda.to_cpu(model.pred.data)
         label_true = cuda.to_gpu(t.data)
         label_pred = score.argmax(axis=1)
 
-        fname = 'test_{0}-{1}_{2:.2}.png'.format(
-            indices[0], indices[-1], accuracy)
+        fname = '{0}_{1}-{2}_{3:.2}.png'.format(
+            osp.basename(chainermodel), indices[0], indices[-1], accuracy)
         fname = osp.join(save_dir, fname)
         draw_test_result(dataset, fname, x_data,
                          label_true, label_pred, n_class)
         print('Saved {0}.'.format(fname))
+    mean_accuracy = sum_accuracy / len(dataset.test)
+    print('Accuracy: {0}'.format(mean_accuracy))
 
 
 if __name__ == '__main__':
