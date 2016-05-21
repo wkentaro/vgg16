@@ -14,4 +14,7 @@ Amazon Picking Challenge 2015
 
 **Result**
 
-.. image:: examples/apc2015/plot.png
+It ends with ``95.13 %`` accuracy.
+With BoF, the accuracy was ``52.44 %``.
+
+.. image:: examples/apc2015/2016-05-21-18-58-15.png
