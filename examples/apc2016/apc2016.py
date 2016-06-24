@@ -133,24 +133,26 @@ class APC2016Dataset(object):
         assert len(datum) == 3
         datum_id = '_'.join(datum)
         inputs = self.db.get(datum_id)
-        if inputs is not None:
-            return pickle.loads(inputs)
-        img_file, mask_file, label_name = datum
-        img = ndi.imread(img_file, mode='RGB')
-        mask = ndi.imread(mask_file, mode='L')
-        # resize mask image
-        if img.shape[:2] != mask.shape[:2]:
-            print('WARNING: img and mask must have same shape. '
-                  'Resizing mask {} to img {}.'
-                  .format(img.shape[:2], mask.shape))
-            mask = skimage.transform.resize(
-                mask, img.shape[:2], preserve_range=True).astype(np.uint8)
-        label_id = np.where(self.target_names == label_name)[0][0]
+        if inputs is None:
+            img_file, mask_file, label_name = datum
+            img = ndi.imread(img_file, mode='RGB')
+            mask = ndi.imread(mask_file, mode='L')
+            # resize mask image
+            if img.shape[:2] != mask.shape[:2]:
+                print('WARNING: img and mask must have same shape. '
+                      'Resizing mask {} to img {}.'
+                      .format(img.shape[:2], mask.shape))
+                mask = skimage.transform.resize(
+                    mask, img.shape[:2], preserve_range=True).astype(np.uint8)
+            inputs = (img, mask, label_name)
+            self.db.put(datum_id, pickle.dumps(inputs))
+        else:
+            inputs = pickle.loads(inputs)
+        img, mask, label_name = inputs
         img_trans = self.transform_img(img, mask, train=train)
         blob = self.rgb_to_blob(img_trans)
-        inputs = (blob, label_id)
-        self.db.put(datum_id, pickle.dumps(inputs))
-        return inputs
+        label_id = np.where(self.target_names == label_name)[0][0]
+        return blob, label_id
 
     def next_datum(self, train, index=None):
         data = self.train if train else self.test
