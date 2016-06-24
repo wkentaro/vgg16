@@ -124,7 +124,7 @@ def main():
         '--resume', nargs=3,
         metavar=('ITER_START', 'CHAINERMODEL', 'OPTIMIZER_STATE'),
         default=('0', None, None))
-    parser.add_argument('--max-iter', type=int, default=100000)
+    parser.add_argument('--max-iter', type=int, default=1000000)
     args = parser.parse_args()
 
     gpu = args.gpu
