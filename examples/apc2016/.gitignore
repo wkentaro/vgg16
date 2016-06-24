@@ -1,3 +1,4 @@
 leveldb/
+logs/
 snapshot/
 test_result/
