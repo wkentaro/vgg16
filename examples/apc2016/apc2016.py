@@ -180,8 +180,14 @@ if __name__ == '__main__':
     dataset = APC2016Dataset()
     for datum in dataset.train:
         img_file, mask_file, label_name = datum
+        if label_name not in dataset.target_names:
+            print(img_file, mask_file, label_name)
+            raise ValueError
+        print(img_file, mask_file, label_name)
         img = ndi.imread(img_file, mode='RGB')
         mask = ndi.imread(mask_file, mode='L')
+        mask = skimage.transform.resize(
+            mask, img.shape[:2], preserve_range=True).astype(np.uint8)
         label = (mask != 0).astype(np.int32)
         label_viz = label2rgb(label, img, bg_label=0)
         plt.imshow(label_viz)
