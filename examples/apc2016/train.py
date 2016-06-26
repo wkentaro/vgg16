@@ -161,8 +161,8 @@ def main():
         optimizer=optimizer,
         dataset=dataset,
         max_iteration=max_iter,
-        snapshot_interval=1000,
-        test_interval=1000,
+        snapshot_interval=4000,
+        test_interval=4000,
     )
     trainer.run(iter_start)
 
