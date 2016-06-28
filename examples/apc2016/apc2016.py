@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import cPickle as pickle
+import math
 import os.path as osp
 
 import numpy as np
@@ -88,6 +89,9 @@ class APC2016Dataset(object):
             img_file = osp.join(dir_, 'image.png')
             mask_file = osp.join(dir_, 'mask.png')
             label_file = osp.join(dir_, 'label.txt')
+            if not osp.exists(label_file):
+                print('WARNING: Skipping {dir}'.format(dir=dir_))
+                continue
             label_name = open(label_file, 'r').read().strip()
             dataset.append((img_file, mask_file, label_name))
         return dataset
@@ -108,20 +112,30 @@ class APC2016Dataset(object):
 
     def transform_img(self, img, mask, train):
         img_trans = img.copy()
+        mask_trans = mask.copy()
         if train:
-            # translate
+            # tranform for robustness
             height, width = img_trans.shape[:2]
             translation = (int(0.1 * np.random.random() * height),
                            int(0.1 * np.random.random() * width))
-            tform = skimage.transform.SimilarityTransform(
+            tform1 = skimage.transform.SimilarityTransform(
                 translation=translation)
-            img_trans = skimage.transform.warp(img_trans, tform, mode='edge',
-                                               preserve_range=True)
-            img_trans = img_trans.astype(np.uint8)
+            center = np.array((width, height)) / 2. - 0.5
+            rotation = np.random.random() * 2 * math.pi
+            tform2 = skimage.transform.SimilarityTransform(translation=center)
+            tform3 = skimage.transform.SimilarityTransform(rotation=rotation)
+            tform4 = skimage.transform.SimilarityTransform(translation=-center)
+            tform = tform4 + tform3 + tform2 + tform1
+            img_trans = skimage.transform.warp(
+                img_trans, tform, mode='constant', cval=self.mean_bgr.mean(),
+                preserve_range=True).astype(np.uint8)
+            mask_trans = skimage.transform.warp(
+                mask_trans, tform, mode='constant', cval=0,
+                preserve_range=True).astype(np.uint8)
         # apply mask
-        img_trans[mask == 0] = self.mean_bgr[::-1]
+        img_trans[mask_trans == 0] = self.mean_bgr[::-1]
         img_trans = fcn.util.apply_mask(
-            img_trans, mask, crop=True, fill_black=False)
+            img_trans, mask_trans, crop=True, fill_black=False)
         # resize
         # img_trans, _ = fcn.util.resize_with_min_hw(img_trans, min_hw=256)
         img_trans = skimage.transform.resize(
@@ -180,15 +194,15 @@ if __name__ == '__main__':
     dataset = APC2016Dataset()
     for datum in dataset.train:
         img_file, mask_file, label_name = datum
-        if label_name not in dataset.target_names:
-            print(img_file, mask_file, label_name)
-            raise ValueError
         print(img_file, mask_file, label_name)
+        if label_name not in dataset.target_names:
+            raise ValueError
         img = ndi.imread(img_file, mode='RGB')
         mask = ndi.imread(mask_file, mode='L')
         mask = skimage.transform.resize(
             mask, img.shape[:2], preserve_range=True).astype(np.uint8)
-        label = (mask != 0).astype(np.int32)
-        label_viz = label2rgb(label, img, bg_label=0)
-        plt.imshow(label_viz)
+        img_trans = dataset.transform_img(img, mask, train=True)
+        plt.imshow(img_trans)
+        plt.axis('off')
+        plt.title(label_name)
         plt.show()
