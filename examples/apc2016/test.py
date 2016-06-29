@@ -17,6 +17,7 @@ from scipy.misc import imsave
 from skimage.util import img_as_float
 from skimage.color import rgb2gray
 from skimage.color import gray2rgb
+from sklearn.metrics import classification_report
 
 import apc2016
 import fcn.util
@@ -68,6 +69,8 @@ def main():
     batch_size = 25
     index = 0
     sum_accuracy = 0
+    label_true_all = []
+    label_pred_all = []
     for index_start in xrange(0, len(dataset.test), batch_size):
         indices = range(index_start,
                         min(len(dataset.test), index_start + batch_size))
@@ -83,9 +86,10 @@ def main():
         x_data = cuda.to_cpu(x.data)
         accuracy = float(cuda.to_cpu(model.acc.data))
         sum_accuracy += accuracy * len(x_data)
-        score = cuda.to_cpu(model.pred.data)
-        label_true = cuda.to_gpu(t.data)
-        label_pred = score.argmax(axis=1)
+        label_true = cuda.to_cpu(t.data)
+        label_pred = cuda.to_cpu(model.pred.data).argmax(axis=1)
+        label_true_all.extend(label_true.tolist())
+        label_pred_all.extend(label_pred.tolist())
 
         fname = '{0}_{1}-{2}_{3:.2}.png'.format(
             osp.basename(chainermodel), indices[0], indices[-1], accuracy)
@@ -95,6 +99,12 @@ def main():
         print('Saved {0}.'.format(fname))
     mean_accuracy = sum_accuracy / len(dataset.test)
     print('Accuracy: {0}'.format(mean_accuracy))
+    print(classification_report(
+        y_true=label_true_all,
+        y_pred=label_pred_all,
+        labels=np.arange(len(dataset.target_names)),
+        target_names=dataset.target_names,
+    ))
 
 
 if __name__ == '__main__':
