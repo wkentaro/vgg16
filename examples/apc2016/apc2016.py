@@ -123,7 +123,7 @@ class APC2016Dataset(object):
             v_random_scale = 0.5
             v_img = hsv_img[:, :, 2]
             v_scale = 1 + 2 * (np.random.random() - 0.5) * v_random_scale
-            v_img *= v_scale  # [-0.5, 1.5)
+            v_img *= v_scale  # [-v_random_scale, v_random_scale)
             v_img[v_img > 1] = 1
             v_img[v_img < 0] = 0
             img_trans = skimage.color.hsv2rgb(hsv_img)
