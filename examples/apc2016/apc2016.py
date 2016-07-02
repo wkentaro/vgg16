@@ -9,7 +9,9 @@ import os.path as osp
 import numpy as np
 import plyvel
 import scipy.ndimage as ndi
+import skimage.color
 import skimage.transform
+import skimage.util
 
 import fcn
 
@@ -115,6 +117,18 @@ class APC2016Dataset(object):
         mask_trans = mask.copy()
         if train:
             # tranform for robustness
+            # translate brightness with HSV
+            img_trans = skimage.util.img_as_float(img_trans)
+            hsv_img = skimage.color.rgb2hsv(img_trans)
+            v_random_scale = 0.5
+            v_img = hsv_img[:, :, 2]
+            v_scale = 1 + 2 * (np.random.random() - 0.5) * v_random_scale
+            v_img *= v_scale  # [-0.5, 1.5)
+            v_img[v_img > 1] = 1
+            v_img[v_img < 0] = 0
+            img_trans = skimage.color.hsv2rgb(hsv_img)
+            img_trans = skimage.util.img_as_ubyte(img_trans)
+            # tranlation & rotation
             height, width = img_trans.shape[:2]
             translation = (int(0.1 * np.random.random() * height),
                            int(0.1 * np.random.random() * width))
@@ -189,7 +203,7 @@ class APC2016Dataset(object):
 
 
 if __name__ == '__main__':
-    from skimage.color import label2rgb
+    # from skimage.color import label2rgb
     import matplotlib.pyplot as plt
     dataset = APC2016Dataset()
     for datum in dataset.train:
